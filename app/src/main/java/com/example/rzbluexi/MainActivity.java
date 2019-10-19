@@ -112,8 +112,6 @@ public class MainActivity extends AppCompatActivity {
         scanLeDevice(true);
 
 
-        Intent gattServiceIntent = new Intent(this, BluetoothLeService.class);
-        bindService(gattServiceIntent, mServiceConnection, BIND_AUTO_CREATE);
 
     }
 
@@ -162,6 +160,8 @@ public class MainActivity extends AppCompatActivity {
                                     mDeviceAddress = device.getAddress();
                                     mDeviceName = device.getName();
 
+                                    startBinding();
+
                                     registerReceiver(mGattUpdateReceiver, makeGattUpdateIntentFilter());
 
                                     scanLeDevice(false);
@@ -177,8 +177,53 @@ public class MainActivity extends AppCompatActivity {
             };
 
 
+    // Code to manage Service lifecycle.
+    ServiceConnection mServiceConnection = new ServiceConnection() {
+        @Override
+        public void onServiceConnected(ComponentName name, IBinder service) {
+            mBluetoothLeService = ((BluetoothLeService.LocalBinder) service).getService();
+            if (!mBluetoothLeService.initialize()) {
+                Log.e(TAG,"Unable to initialize Bluetooth");
+                finish();
+            }
+
+            Log.d(TAG, "Device address: " + mDeviceAddress);
+
+            if (mDeviceAddress != null) {
+
+                // Automatically connects to the device upon successful start-up initialization.
+                mBluetoothLeService.connect(mDeviceAddress);
+                gatServicesAndTestMessage();
+            }
+        }
+
+        @Override
+        public void onServiceDisconnected(ComponentName name) {
+            mBluetoothLeService = null;
+        }
+
+    };
+
+public void startBinding(){
+    Intent gattServiceIntent = new Intent(this, BluetoothLeService.class);
+    bindService(gattServiceIntent, mServiceConnection, BIND_AUTO_CREATE);
+}
+
+public void gatServicesAndTestMessage() {
 
 
+    displayGattServices(mBluetoothLeService.getSupportedGattServices());
+    Log.i(TAG, "CONNECTED!!!!!!");
+    String str = "AT+PIO21";
+    final byte[] tx = str.getBytes();
+
+
+    Log.d(TAG, "->" + Arrays.toString(tx));
+    characteristicTX.setValue(tx);
+    mBluetoothLeService.writeCharacteristic(characteristicTX);
+
+
+}
 
 
 
@@ -189,7 +234,11 @@ public class MainActivity extends AppCompatActivity {
     // In this sample, we populate the data structure that is bound to the ExpandableListView
     // on the UI.
     private void displayGattServices(List<BluetoothGattService> gattServices) {
-        if (gattServices == null) return;
+        if (gattServices == null) {
+            Log.d(TAG,"No gattServices");
+            return;
+        }
+
         String uuid = null;
         String unknownServiceString = getResources().getString(R.string.unknown_service);
         ArrayList<HashMap<String, String>> gattServiceData = new ArrayList<HashMap<String, String>>();
@@ -260,38 +309,8 @@ public class MainActivity extends AppCompatActivity {
         return intentFilter;
     }
 
-    // Code to manage Service lifecycle.
-    private final ServiceConnection mServiceConnection = new ServiceConnection() {
-        @Override
-        public void onServiceConnected(ComponentName name, IBinder service) {
-            mBluetoothLeService = ((BluetoothLeService.LocalBinder) service).getService();
-            if (!mBluetoothLeService.initialize()) {
-                Log.e(TAG,"Unable to initialize Bluetooth");
-                finish();
-            }
-
-            Log.d(TAG, "Device address: " + mDeviceAddress);
-
-            // Automatically connects to the device upon successful start-up initialization.
-            mBluetoothLeService.connect(mDeviceAddress);
-
-            displayGattServices(mBluetoothLeService.getSupportedGattServices());
-            Log.i(TAG, "CONNECTED!!!!!!");
-            String str = "AT+PIO21";
-            final byte[] tx = str.getBytes();
 
 
-            Log.d(TAG, "->" + Arrays.toString(tx));
-            characteristicTX.setValue(tx);
-            mBluetoothLeService.writeCharacteristic(characteristicTX);
-
-        }
-
-        @Override
-        public void onServiceDisconnected(ComponentName name) {
-            mBluetoothLeService = null;
-        }
-    };
 
 
 
